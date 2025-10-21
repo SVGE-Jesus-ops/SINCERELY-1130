@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract Sincerely_Tokens is ERC20, Ownable {
+    uint256 public constant INITIAL_SUPPLY = 1_000_000_000 * 10 ** 18;
+
+    constructor() ERC20("Sincerely", "SNC") {
+        _mint(msg.sender, INITIAL_SUPPLY);
+    }
+
+    // Optional: Allow ETH for SNC swap (basic version)
+    uint256 public ethRate = 1000; // 1 ETH = 100 SNC
+
+    receive() external payable {
+        require(msg.value > 0, "Send ETH to receive SNC");
+        uint256 amount = msg.value * ethRate;
+        require(totalSupply() + amount <= 10_000_000_000 * 10 ** 18, "Max supply exceeded");
+        _mint(msg.sender, amount);
+    }
+
+    function withdraw() external onlyOwner {
+        payable(owner()).transfer(address(this).balance);
+    }
+}
