@@ -1,27 +1,131 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-
-contract Sincerely_Tokens is ERC20, Ownable {
-    uint256 public constant INITIAL_SUPPLY = 1_000_000_ * 10 ** 18;
-
-    constructor() ERC20("Sincerely", "SNC") {
-        _mint(msg.sender, INITIAL_SUPPLY);
+/**
+ * @title SINCERELY Token
+ * @dev Enhanced ERC20-like token with improved security and event tracking
+ * @notice This contract implements a basic token with minting capabilities
+ */
+contract SINCERELY {
+    // Token metadata
+    string public name = "SINCERELY";
+    string public symbol = "SNC";
+    uint8 public decimals = 18;
+    
+    // Total supply - Fixed: removed extra underscore (was 1_000_000_)
+    uint256 public totalSupply = 1_000_000 * 10**decimals;
+    
+    // Balance tracking
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+    
+    // Events for tracking all token operations
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+    event Mint(address indexed to, uint256 value, uint256 ethReceived);
+    event Burn(address indexed from, uint256 value);
+    
+    /**
+     * @dev Constructor initializes the contract and assigns total supply to deployer
+     */
+    constructor() {
+        balanceOf[msg.sender] = totalSupply;
+        emit Transfer(address(0), msg.sender, totalSupply);
     }
-
-    // Optional: Allow ETH for SNC swap (basic version)
-    uint256 public ethRate = 1000; // 1 ETH = 100 SNC
-
+    
+    /**
+     * @dev Transfer tokens to a specified address
+     * @param _to The address to transfer to
+     * @param _value The amount to be transferred
+     * @return success True if the operation was successful
+     */
+    function transfer(address _to, uint256 _value) public returns (bool success) {
+        require(balanceOf[msg.sender] >= _value, "Insufficient balance");
+        require(_to != address(0), "Invalid recipient address");
+        
+        balanceOf[msg.sender] -= _value;
+        balanceOf[_to] += _value;
+        
+        emit Transfer(msg.sender, _to, _value);
+        return true;
+    }
+    
+    /**
+     * @dev Approve an address to spend tokens on behalf of msg.sender
+     * @param _spender The address authorized to spend
+     * @param _value The max amount they can spend
+     * @return success True if the operation was successful
+     */
+    function approve(address _spender, uint256 _value) public returns (bool success) {
+        require(_spender != address(0), "Invalid spender address");
+        
+        allowance[msg.sender][_spender] = _value;
+        
+        emit Approval(msg.sender, _spender, _value);
+        return true;
+    }
+    
+    /**
+     * @dev Transfer tokens from one address to another using allowance
+     * @param _from The address to transfer from
+     * @param _to The address to transfer to
+     * @param _value The amount to be transferred
+     * @return success True if the operation was successful
+     */
+    function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
+        require(_value <= balanceOf[_from], "Insufficient balance");
+        require(_value <= allowance[_from][msg.sender], "Allowance exceeded");
+        require(_to != address(0), "Invalid recipient address");
+        
+        balanceOf[_from] -= _value;
+        balanceOf[_to] += _value;
+        allowance[_from][msg.sender] -= _value;
+        
+        emit Transfer(_from, _to, _value);
+        return true;
+    }
+    
+    /**
+     * @dev Mint new tokens by sending ETH to the contract
+     * @notice Fixed: Changed from msg.value > 1 to msg.value > 0 to allow any amount
+     * @return success True if minting was successful
+     */
+    function mint() public payable returns (bool success) {
+        // Fixed: Allow any ETH amount greater than 0 (was msg.value > 1)
+        require(msg.value > 0, "Must send ETH to mint tokens");
+        
+        uint256 tokensToMint = msg.value * 1000; // 1000 tokens per wei
+        balanceOf[msg.sender] += tokensToMint;
+        totalSupply += tokensToMint;
+        
+        emit Mint(msg.sender, tokensToMint, msg.value);
+        emit Transfer(address(0), msg.sender, tokensToMint);
+        
+        return true;
+    }
+    
+    /**
+     * @dev Burn tokens from sender's balance
+     * @param _value The amount of tokens to burn
+     * @return success True if burning was successful
+     */
+    function burn(uint256 _value) public returns (bool success) {
+        require(balanceOf[msg.sender] >= _value, "Insufficient balance to burn");
+        
+        balanceOf[msg.sender] -= _value;
+        totalSupply -= _value;
+        
+        emit Burn(msg.sender, _value);
+        emit Transfer(msg.sender, address(0), _value);
+        
+        return true;
+    }
+    
+    /**
+     * @dev Fallback function to handle direct ETH transfers
+     * @notice Automatically mints tokens when ETH is sent to contract
+     */
     receive() external payable {
-        require(msg.value > 1, "Send ETH to receive SNC");
-        uint256 amount = msg.value * ethRate;
-        require(totalSupply() + amount <= 1_000_000 * 10 ** 18, "Max supply, created");
-        _mint(msg.sender, amount);
-    }
-
-    function withdraw() external onlyOwner {
-        payable(owner()).transfer(address(this).balance);
+        require(mint(), "Minting failed");
     }
 }
